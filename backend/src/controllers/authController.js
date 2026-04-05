@@ -1,3 +1,5 @@
+import { registerSchema, loginSchema } from "../utils/validation.js";
+import { handleError } from "../utils/errorHandler.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -5,41 +7,56 @@ import jwt from "jsonwebtoken";
 // REGISTER
 export const register = async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const data = registerSchema.parse(req.body);
 
-        const userExists = await User.findOne({ email });
+        const userExists = await User.findOne({ email: data.email });
         if (userExists) {
-            return res.status(400).json({ message: "User already exists" });
+            return res.status(400).json({
+                success: false,
+                message: "User already exists",
+            });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(data.password, 10);
 
         const user = await User.create({
-            name,
-            email,
+            ...data,
             password: hashedPassword,
-            role,
         });
 
-        res.status(201).json({ message: "User created", user });
+        res.status(201).json({
+            success: true,
+            message: "User created successfully",
+            data: {
+                id: user._id,
+                email: user.email,
+                role: user.role,
+            },
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        handleError(res, err);
     }
 };
 
 // LOGIN
 export const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const data = loginSchema.parse(req.body);
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: data.email });
         if (!user) {
-            return res.status(400).json({ message: "Invalid credentials" });
+            return res.status(400).json({
+                success: false,
+                message: "Invalid email or password",
+            });
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(data.password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ message: "Invalid credentials" });
+            return res.status(400).json({
+                success: false,
+                message: "Invalid email or password",
+            });
         }
 
         const token = jwt.sign(
@@ -48,8 +65,11 @@ export const login = async (req, res) => {
             { expiresIn: "1d" }
         );
 
-        res.json({ token });
+        res.json({
+            success: true,
+            token,
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        handleError(res, err);
     }
 };

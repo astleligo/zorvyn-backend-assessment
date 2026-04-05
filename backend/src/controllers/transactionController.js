@@ -1,29 +1,48 @@
 import Transaction from "../models/Transaction.js";
+import { transactionSchema } from "../utils/validation.js";
+import { handleError } from "../utils/errorHandler.js";
 
 // CREATE
 export const createTransaction = async (req, res) => {
     try {
+        const data = transactionSchema.parse(req.body);
+
         const transaction = await Transaction.create({
-            ...req.body,
+            ...data,
             createdBy: req.user.id,
         });
 
-        res.status(201).json(transaction);
+        res.status(201).json({
+            success: true,
+            data: transaction,
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        handleError(res, err);
     }
 };
 
 // GET (with filtering)
 export const getTransactions = async (req, res) => {
     try {
-        const { type, category, startDate, endDate } = req.query;
+        const {
+            type,
+            category,
+            startDate,
+            endDate,
+            search,
+            page = 1,
+            limit = 10,
+        } = req.query;
 
         let filter = {};
 
+        // Filter by type
         if (type) filter.type = type;
+
+        // Filter by category
         if (category) filter.category = category;
 
+        // Date range filter
         if (startDate && endDate) {
             filter.date = {
                 $gte: new Date(startDate),
@@ -31,35 +50,87 @@ export const getTransactions = async (req, res) => {
             };
         }
 
-        const transactions = await Transaction.find(filter).sort({ date: -1 });
+        // Search (category or notes)
+        if (search) {
+            filter.$or = [
+                { category: { $regex: search, $options: "i" } },
+                { notes: { $regex: search, $options: "i" } },
+            ];
+        }
 
-        res.json(transactions);
+        // Pagination setup
+        const pageNumber = Number(page);
+        const limitNumber = Number(limit);
+        const skip = (pageNumber - 1) * limitNumber;
+
+        // Get total count
+        const total = await Transaction.countDocuments(filter);
+
+        // Fetch data
+        const transactions = await Transaction.find(filter)
+            .sort({ date: -1 })
+            .skip(skip)
+            .limit(limitNumber);
+
+        res.json({
+            success: true,
+            data: transactions,
+            pagination: {
+                total,
+                page: pageNumber,
+                limit: limitNumber,
+                totalPages: Math.ceil(total / limitNumber),
+            },
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        handleError(res, err);
     }
 };
 
 // UPDATE
 export const updateTransaction = async (req, res) => {
     try {
+        const data = transactionSchema.partial().parse(req.body);
+
         const transaction = await Transaction.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            data,
             { new: true }
         );
 
-        res.json(transaction);
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                message: "Transaction not found",
+            });
+        }
+
+        res.json({
+            success: true,
+            data: transaction,
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        handleError(res, err);
     }
 };
 
 // DELETE
 export const deleteTransaction = async (req, res) => {
     try {
-        await Transaction.findByIdAndDelete(req.params.id);
-        res.json({ message: "Transaction deleted" });
+        const transaction = await Transaction.findByIdAndDelete(req.params.id);
+
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                message: "Transaction not found",
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Transaction deleted",
+        });
     } catch (err) {
-        res.status(500).json({ message: err.message });
+        handleError(res, err);
     }
 };

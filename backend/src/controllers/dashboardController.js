@@ -1,12 +1,12 @@
 import Transaction from "../models/Transaction.js";
 
-// 📊 SUMMARY
+// SUMMARY
 export const getSummary = async (req, res) => {
     try {
         const result = await Transaction.aggregate([
             {
                 $group: {
-                    _id: "$type", // ✅ FIXED
+                    _id: "$type",
                     total: { $sum: "$amount" },
                 },
             },
@@ -30,7 +30,7 @@ export const getSummary = async (req, res) => {
     }
 };
 
-// 📊 CATEGORY BREAKDOWN
+// CATEGORY BREAKDOWN
 export const getCategoryBreakdown = async (req, res) => {
     try {
         const result = await Transaction.aggregate([
@@ -54,7 +54,7 @@ export const getCategoryBreakdown = async (req, res) => {
     }
 };
 
-// 📊 MONTHLY TRENDS
+// MONTHLY TRENDS
 export const getMonthlyTrends = async (req, res) => {
     try {
         const result = await Transaction.aggregate([
@@ -92,5 +92,23 @@ export const getMonthlyTrends = async (req, res) => {
         res.json(result);
     } catch (err) {
         res.status(500).json({ message: err.message });
+    }
+};
+
+export const getRecentTransactions = async (req, res) => {
+    try {
+        const transactions = await Transaction.find()
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        res.json({
+            success: true,
+            data: transactions,
+        });
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch recent transactions",
+        });
     }
 };
