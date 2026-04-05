@@ -42,6 +42,21 @@ export const getTransactions = async (req, res) => {
         // Filter by category
         if (category) filter.category = category;
 
+        // Validate dates
+        if (startDate && isNaN(new Date(startDate))) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid startDate",
+            });
+        }
+
+        if (endDate && isNaN(new Date(endDate))) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid endDate",
+            });
+        }
+
         // Date range filter
         if (startDate && endDate) {
             filter.date = {
@@ -50,7 +65,7 @@ export const getTransactions = async (req, res) => {
             };
         }
 
-        // Search (category or notes)
+        // Search
         if (search) {
             filter.$or = [
                 { category: { $regex: search, $options: "i" } },
@@ -58,15 +73,32 @@ export const getTransactions = async (req, res) => {
             ];
         }
 
-        // Pagination setup
+        // Pagination validation
         const pageNumber = Number(page);
-        const limitNumber = Number(limit);
+        const limitNumberRaw = Number(limit);
+
+        if (isNaN(pageNumber) || pageNumber < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid page number",
+            });
+        }
+
+        if (isNaN(limitNumberRaw) || limitNumberRaw < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid limit value",
+            });
+        }
+
+        // Apply limit cap (IMPORTANT)
+        const limitNumber = Math.min(limitNumberRaw, 50);
         const skip = (pageNumber - 1) * limitNumber;
 
-        // Get total count
+        // Count
         const total = await Transaction.countDocuments(filter);
 
-        // Fetch data
+        // Fetch
         const transactions = await Transaction.find(filter)
             .sort({ date: -1 })
             .skip(skip)
